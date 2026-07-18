@@ -235,9 +235,16 @@ def create_app(config: Settings | None = None) -> FastAPI:
         )
         scenes = sorted(p.name for p in core.cfg.scenes_dir.glob("*.md")) if core.cfg.scenes_dir.exists() else []
         skills = sorted(p.name for p in core.cfg.skills_dir.glob("*.md")) if core.cfg.skills_dir.exists() else []
+        superseded = sum(1 for r in core.store.get_all_l1() if r.get("superseded_by"))
+        ledger = getattr(core, "ledger", None)
+        ledger_entries = 0
+        if ledger is not None and ledger.enabled and ledger.entries_path.exists():
+            ledger_entries = sum(1 for line in ledger.entries_path.read_text(encoding="utf-8").splitlines() if line.strip())
         return {
             "version": __version__,
             **core.stats(),
+            "superseded": superseded,
+            "ledger": {"enabled": bool(ledger is not None and ledger.enabled), "entries": ledger_entries},
             "recent_memories": [
                 {"content": r["content"], "type": r["type"], "scope": r.get("scope", "user")} for r in recent
             ],

@@ -1,6 +1,6 @@
 """ZaniiDB Agent Memory — layered long-term memory (L0→L3) for AI agents."""
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 from .config import Settings
 from .core import MemoryCore, ZaniiMemory

@@ -1,6 +1,7 @@
 """Memory observability dashboard — a single self-contained HTML page served
 by the gateway at /dashboard. Vanilla JS, no external assets; fetches
-/api/overview (passing ?token= through when the gateway requires auth)."""
+/api/overview (passing ?token= through when the gateway requires auth).
+Light + dark, responsive, matches the ZaniiDB brand palette."""
 
 DASHBOARD_HTML = """<!doctype html>
 <html lang="en">
@@ -9,83 +10,173 @@ DASHBOARD_HTML = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ZaniiDB Agent Memory</title>
 <style>
-  :root { --bg:#0f1115; --card:#181b22; --text:#e6e8ee; --muted:#8b91a0; --accent:#5aa9e6; --line:#262a33; }
-  @media (prefers-color-scheme: light) {
-    :root { --bg:#f5f6f8; --card:#ffffff; --text:#1c1e24; --muted:#5c6270; --accent:#1f6fb2; --line:#e3e5ea; }
+  :root {
+    color-scheme: light dark;
+    --bg:#f6f7f9; --surface:#ffffff; --surface2:#eef0f4; --line:#e3e6ec;
+    --text:#16181d; --muted:#5b6170; --faint:#8a90a0;
+    --accent:#2a78d6; --aqua:#1baf7a; --violet:#4a3aa7; --orange:#eb6834; --red:#e34948;
+    --shadow:0 1px 3px rgba(16,18,24,.06), 0 4px 16px rgba(16,18,24,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#101218; --surface:#171a21; --surface2:#1e222b; --line:#272b36;
+      --text:#e8eaf0; --muted:#9aa0ae; --faint:#6b7180;
+      --accent:#3987e5; --aqua:#199e70; --violet:#9085e9; --orange:#d95926; --red:#e66767;
+      --shadow:0 1px 2px rgba(0,0,0,.4);
+    }
   }
   * { box-sizing:border-box; margin:0; }
-  body { background:var(--bg); color:var(--text); font:15px/1.55 system-ui, "Segoe UI", sans-serif; padding:32px 24px; }
-  .wrap { max-width:1080px; margin:0 auto; }
-  h1 { font-size:20px; font-weight:650; margin-bottom:4px; }
-  .sub { color:var(--muted); margin-bottom:24px; font-size:13px; }
-  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
-  .tile { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
-  .tile .n { font-size:24px; font-weight:650; }
-  .tile .l { color:var(--muted); font-size:12px; }
-  h2 { font-size:14px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:24px 0 10px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto; }
-  .mem { padding:7px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  body { background:var(--bg); color:var(--text);
+         font:14px/1.6 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif; }
+  a { color:var(--accent); text-decoration:none; }
+
+  header { position:sticky; top:0; z-index:5; background:var(--surface);
+           border-bottom:1px solid var(--line); padding:14px 28px;
+           display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .logo { width:12px; height:12px; border-radius:3px; background:var(--accent);
+          box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+  h1 { font-size:16px; font-weight:650; letter-spacing:.01em; }
+  .ver { color:var(--faint); font-size:12px; font-variant-numeric:tabular-nums; }
+  .pills { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11.5px; padding:3px 10px; border-radius:99px; border:1px solid var(--line);
+          color:var(--muted); background:var(--surface2); display:flex; gap:6px; align-items:center; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); }
+  .pill.on .dot { background:var(--aqua); }
+  .pill.on { color:var(--text); }
+
+  main { max-width:1180px; margin:0 auto; padding:26px 28px 60px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:26px; }
+  .tile { background:var(--surface); border:1px solid var(--line); border-radius:12px;
+          padding:16px 18px; box-shadow:var(--shadow); }
+  .tile .n { font-size:26px; font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+  .tile .l { color:var(--muted); font-size:12px; margin-top:2px; }
+
+  .grid { display:grid; grid-template-columns:1.6fr 1fr; gap:22px; align-items:start; }
+  @media (max-width: 900px) { .grid { grid-template-columns:1fr; } }
+  section { background:var(--surface); border:1px solid var(--line); border-radius:12px;
+            box-shadow:var(--shadow); margin-bottom:22px; overflow:hidden; }
+  section > h2 { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+                 color:var(--muted); padding:14px 20px 0; }
+  .body { padding:12px 20px 18px; }
+
+  input[type=search] { width:100%; background:var(--surface2); border:1px solid var(--line);
+    color:var(--text); border-radius:9px; padding:10px 14px; font:inherit; outline:none;
+    transition:border-color .15s; }
+  input[type=search]:focus { border-color:var(--accent); }
+
+  .mem { display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--line);
+         align-items:baseline; }
   .mem:last-child { border-bottom:none; }
-  .tag { display:inline-block; font-size:11px; padding:1px 8px; border-radius:99px; border:1px solid var(--line); color:var(--accent); margin-right:8px; }
-  pre { white-space:pre-wrap; font:13px/1.5 ui-monospace, Consolas, monospace; }
-  input { background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:8px 12px; width:100%; margin-bottom:12px; font:inherit; }
-  .err { color:#e66a6a; }
+  .chip { flex:none; font-size:10.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+          padding:2px 8px; border-radius:6px; color:#fff; }
+  .chip.persona { background:var(--accent); } .chip.episodic { background:var(--orange); }
+  .chip.instruction { background:var(--violet); }
+  .chip.team { background:transparent; color:var(--aqua); border:1px solid var(--aqua); }
+  .mem .score { margin-left:auto; color:var(--faint); font-size:11.5px; font-variant-numeric:tabular-nums; }
+  .empty { color:var(--faint); padding:8px 0; }
+
+  pre { white-space:pre-wrap; font:12.5px/1.55 ui-monospace,Consolas,monospace; color:var(--text);
+        max-height:340px; overflow:auto; }
+  .files span { display:inline-block; background:var(--surface2); border:1px solid var(--line);
+    border-radius:7px; padding:2px 10px; margin:0 6px 6px 0; font-size:12px; color:var(--muted); }
+  .audit-row { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--line);
+               font-size:12.5px; }
+  .audit-row:last-child { border-bottom:none; }
+  .audit-row .op { flex:none; color:var(--accent); font-weight:600; min-width:110px; }
+  .audit-row time { margin-left:auto; color:var(--faint); white-space:nowrap; }
+  footer { text-align:center; color:var(--faint); font-size:12px; padding:10px 0 30px; }
+  .err { color:var(--red); padding:20px 28px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>ZaniiDB Agent Memory</h1>
-  <div class="sub" id="sub">loading&hellip;</div>
+<header>
+  <div class="logo"></div><h1>ZaniiDB Agent Memory</h1><span class="ver" id="ver"></span>
+  <div class="pills" id="pills"></div>
+</header>
+<main>
   <div class="tiles" id="tiles"></div>
-  <h2>Search memories</h2>
-  <input id="q" placeholder="Type to search L1 memories&hellip;">
-  <div class="card" id="results">No query yet.</div>
-  <h2>Recent memories</h2>
-  <div class="card" id="recent"></div>
-  <h2>Persona</h2>
-  <div class="card"><pre id="persona">(none)</pre></div>
-  <h2>Scenes &amp; skills</h2>
-  <div class="card" id="files"></div>
-  <h2>Audit (latest)</h2>
-  <div class="card" id="audit">(audit disabled)</div>
-</div>
+  <div class="grid">
+    <div>
+      <section><h2>Search memories</h2><div class="body">
+        <input id="q" type="search" placeholder="Search long-term memories&hellip;" autocomplete="off">
+        <div id="results"><div class="empty">Type to search.</div></div>
+      </div></section>
+      <section><h2>Recent memories</h2><div class="body" id="recent"></div></section>
+      <section><h2>Audit trail</h2><div class="body" id="audit"></div></section>
+    </div>
+    <div>
+      <section><h2>Persona</h2><div class="body"><pre id="persona">(none yet)</pre></div></section>
+      <section><h2>Scenes</h2><div class="body files" id="scenes"></div></section>
+      <section><h2>Skills</h2><div class="body files" id="skills"></div></section>
+    </div>
+  </div>
+  <footer id="foot"></footer>
+</main>
 <script>
 const token = new URLSearchParams(location.search).get("token");
 const auth = token ? {headers: {Authorization: "Bearer " + token}} : {};
 const qs = token ? "?token=" + encodeURIComponent(token) : "";
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const memHtml = m => `<div class="mem"><span class="tag">${esc(m.type)}${m.scope==="team"?" · team":""}</span>${esc(m.content)}</div>`;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const memHtml = m => `<div class="mem"><span class="chip ${esc(m.type)}">${esc(m.type)}</span>` +
+  (m.scope === "team" ? `<span class="chip team">team</span>` : "") +
+  `<span>${esc(m.content)}</span>` +
+  (m.score != null ? `<span class="score">${Number(m.score).toFixed(2)}</span>` : "") + `</div>`;
 
 async function load() {
-  const r = await fetch("/api/overview" + qs, auth);
-  if (!r.ok) { document.getElementById("sub").innerHTML = `<span class="err">Error ${r.status} — pass ?token=&lt;gateway api key&gt; in the URL</span>`; return; }
+  let r;
+  try { r = await fetch("/api/overview" + qs, auth); } catch { r = null; }
+  if (!r || !r.ok) {
+    document.querySelector("main").innerHTML =
+      `<div class="err">Cannot load overview${r ? " (HTTP " + r.status + ")" : ""} — if the gateway has an API key, open /dashboard?token=&lt;key&gt;</div>`;
+    return;
+  }
   const d = await r.json();
-  document.getElementById("sub").textContent = `v${d.version} · ${d.backend} backend · llm ${d.llm?"on":"off"} · embeddings ${d.embeddings?"on":"off"}`;
-  document.getElementById("tiles").innerHTML = [
-    [d.l1_memories,"memories (L1)"],[d.l0_messages,"messages (L0)"],[d.sessions,"sessions"],
-    [d.scenes.length,"scenes"],[d.skills.length,"skills"],[d.vectors?"on":"off","vector search"]
-  ].map(([n,l])=>`<div class="tile"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`).join("");
-  document.getElementById("recent").innerHTML = d.recent_memories.map(memHtml).join("") || "No memories yet.";
+  document.getElementById("ver").textContent = "v" + d.version + " · " + d.backend;
+  const caps = [["LLM", d.llm], ["Embeddings", d.embeddings], ["Vectors", d.vectors],
+                ["Ledger", d.ledger && d.ledger.enabled]];
+  document.getElementById("pills").innerHTML = caps.map(([n, on]) =>
+    `<span class="pill ${on ? "on" : ""}"><span class="dot"></span>${n}</span>`).join("");
+  const tiles = [
+    [d.l1_memories, "active memories"],
+    [d.superseded ?? 0, "superseded (history)"],
+    [d.l0_messages, "captured messages"],
+    [d.sessions, "sessions"],
+    [(d.scenes || []).length, "scenes"],
+    [d.ledger && d.ledger.enabled ? d.ledger.entries : "—", "ledger receipts"],
+  ];
+  document.getElementById("tiles").innerHTML = tiles.map(([n, l]) =>
+    `<div class="tile"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`).join("");
+  document.getElementById("recent").innerHTML =
+    (d.recent_memories || []).map(memHtml).join("") || `<div class="empty">No memories yet — capture a conversation or seed facts.</div>`;
   document.getElementById("persona").textContent = d.persona || "(no persona generated yet)";
-  document.getElementById("files").innerHTML =
-    "<b>scenes:</b> " + (d.scenes.map(esc).join(", ") || "none") +
-    "<br><b>skills:</b> " + (d.skills.map(esc).join(", ") || "none");
+  document.getElementById("scenes").innerHTML =
+    (d.scenes || []).map(s => `<span>${esc(s)}</span>`).join("") || `<div class="empty">none</div>`;
+  document.getElementById("skills").innerHTML =
+    (d.skills || []).map(s => `<span>${esc(s)}</span>`).join("") || `<div class="empty">none</div>`;
   document.getElementById("audit").innerHTML =
-    d.audit.length ? d.audit.map(a=>`<div class="mem"><span class="tag">${esc(a.op)}</span>${esc(a.detail)} <span style="color:var(--muted)">· ${new Date(a.ts).toLocaleString()}</span></div>`).join("") : "(audit disabled or empty)";
+    (d.audit || []).length ? d.audit.map(a =>
+      `<div class="audit-row"><span class="op">${esc(a.op)}</span><span>${esc(a.detail)}</span>` +
+      `<time>${new Date(a.ts).toLocaleTimeString()}</time></div>`).join("")
+    : `<div class="empty">Audit log is empty — enable with ZANII_AUDIT_ENABLED=true.</div>`;
+  document.getElementById("foot").textContent =
+    "data: " + d.data_dir + " · refreshed " + new Date().toLocaleTimeString();
 }
 let t;
 document.getElementById("q").addEventListener("input", e => {
   clearTimeout(t);
   t = setTimeout(async () => {
     const q = e.target.value.trim();
-    if (!q) { document.getElementById("results").textContent = "No query yet."; return; }
-    const r = await fetch("/search/memories" + qs, {method:"POST", ...auth,
-      headers:{...(auth.headers||{}), "Content-Type":"application/json"}, body: JSON.stringify({query:q, limit:10})});
+    const box = document.getElementById("results");
+    if (!q) { box.innerHTML = `<div class="empty">Type to search.</div>`; return; }
+    const r = await fetch("/search/memories" + qs, {method: "POST", ...auth,
+      headers: {...(auth.headers || {}), "Content-Type": "application/json"},
+      body: JSON.stringify({query: q, limit: 10})});
     const d = await r.json();
-    document.getElementById("results").innerHTML = d.results.map(memHtml).join("") || "No matches.";
+    box.innerHTML = (d.results || []).map(memHtml).join("") || `<div class="empty">No matches.</div>`;
   }, 250);
 });
 load();
+setInterval(load, 30000);
 </script>
 </body>
 </html>"""
