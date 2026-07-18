@@ -186,6 +186,8 @@ The server runs over stdio and shares the same `ZANII_*` configuration and data 
 
 ## Observability dashboard
 
+<p align="center"><img src="assets/dashboard-light.png" alt="ZaniiDB dashboard: stat tiles, memory search, type-chipped memories, audit trail, persona" width="860" /></p>
+
 `zanii-memory serve`, then open **http://127.0.0.1:8520/dashboard** — live stats, memory search, recent memories, persona, scenes, skills, and the audit trail on one page. When `ZANII_GATEWAY_API_KEY` is set, append `?token=<key>`.
 
 ## Benchmark
