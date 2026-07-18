@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zaniidb-agent-memory"
-version = "0.6.0"
+version = "0.7.0"
 description = "ZaniiDB Agent Memory - layered long-term memory (L0-L3) for AI agents: SQLite + hybrid BM25/vector recall, LLM extraction pipeline, FastAPI gateway, Python SDK."
 readme = "README.md"
 license = { text = "MIT" }
@@ -32,7 +32,8 @@ dependencies = [
 
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.1"]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+provable = ["zanii>=0.15.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "zanii>=0.15.0"]
 
 [project.urls]
 Homepage = "https://github.com/vigilancetrent/zaniiDB-Agent-Memory"

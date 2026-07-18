@@ -151,6 +151,51 @@ def cmd_skills(args: argparse.Namespace) -> None:
     _run_with_core(do)
 
 
+def cmd_ledger_init(args: argparse.Namespace) -> None:
+    try:
+        from zanii.core import create_cert, generate_keypair
+    except ImportError:
+        sys.exit('Requires the zanii SDK: pip install "zaniidb-agent-memory[provable]"')
+    owner, agent = generate_keypair(), generate_keypair()
+    cert = create_cert(
+        issuer=owner.did, subject=agent.did, scopes=["memory.*"],
+        exp=args.exp, issuer_private_key=owner.private_key,
+    )
+    identity_path = Path(args.identity_file)
+    identity_path.parent.mkdir(parents=True, exist_ok=True)
+    identity_path.write_text(
+        json.dumps({"did": agent.did, "private_key_hex": agent.private_key.hex(), "delegation": [cert]}, indent=1),
+        encoding="utf-8",
+    )
+    owner_path = identity_path.with_name(identity_path.stem + "_owner.json")
+    owner_path.write_text(
+        json.dumps({"did": owner.did, "private_key_hex": owner.private_key.hex()}, indent=1),
+        encoding="utf-8",
+    )
+    print(f"agent identity -> {identity_path}   (did {agent.did[:32]}…)")
+    print(f"OWNER key      -> {owner_path}   (KEEP OFFLINE — it can re-delegate)")
+    print("Enable with:")
+    print(f"  ZANII_LEDGER_IDENTITY_FILE={identity_path}")
+    print("  ZANII_LEDGER_URL=https://ledger.zanii.agency")
+    print("  ZANII_LEDGER_API_KEY=zk_live_...   (writes need a key; reads are public)")
+
+
+def cmd_ledger_verify(args: argparse.Namespace) -> None:
+    try:
+        from zanii.memory import verify_memory_chain
+    except ImportError:
+        sys.exit('Requires the zanii SDK: pip install "zaniidb-agent-memory[provable]"')
+    path = Settings().data_dir / "ledger_entries.jsonl"
+    if not path.exists():
+        sys.exit(f"No ledger entries at {path} (provable memory not enabled or nothing recorded)")
+    entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    report = verify_memory_chain(entries)
+    status = "OK — chain intact" if report.get("ok") else f"TAMPERED: {report.get('reasons')}"
+    print(f"{len(entries)} entries: {status}")
+    if not report.get("ok"):
+        sys.exit(1)
+
+
 def cmd_audit(args: argparse.Namespace) -> None:
     async def do(core: MemoryCore):
         entries = core.audit_log(args.limit)
@@ -228,6 +273,14 @@ def main() -> None:
 
     p_skills = sub.add_parser("skills", help="Distill SOP/skill docs from memories (requires LLM)")
     p_skills.set_defaults(func=cmd_skills)
+
+    p_linit = sub.add_parser("ledger-init", help="Create a Zanii identity + delegation for provable memory")
+    p_linit.add_argument("--identity-file", default=str(Path.home() / ".zanii" / "ledger_identity.json"))
+    p_linit.add_argument("--exp", default="2027-12-31T00:00:00Z", help="Delegation expiry (UTC ISO-8601)")
+    p_linit.set_defaults(func=cmd_ledger_init)
+
+    p_lverify = sub.add_parser("ledger-verify", help="Verify the local provable-memory chain (offline)")
+    p_lverify.set_defaults(func=cmd_ledger_verify)
 
     p_audit = sub.add_parser("audit", help="Show the audit log")
     p_audit.add_argument("-n", "--limit", type=int, default=100)

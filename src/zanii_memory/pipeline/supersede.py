@@ -15,6 +15,7 @@ import re
 
 from ..config import Settings
 from ..llm import LLMClient
+from ..provable import emit_via_store
 from ..store import MemoryStore
 from ..types import MemoryRecord
 
@@ -111,6 +112,10 @@ async def resolve_conflicts(
                     "SUPERSEDE: %r -> replaced by %r",
                     content_by_id.get(old_id, old_id)[:120],
                     new_by_id[item["new_id"]][:120],
+                )
+                emit_via_store(
+                    store, "l1.supersede",
+                    json.dumps({"old_id": old_id, "new_id": item["new_id"]}, sort_keys=True),
                 )
     if superseded:
         log.info("Conflict resolution superseded %d outdated memories", superseded)

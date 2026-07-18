@@ -284,6 +284,25 @@ The pipeline distills recurring task patterns from episodic + instruction memori
 - merges semantically near-duplicate memories (vector distance ≤ `ZANII_DEDUP_MAX_DISTANCE`, higher priority wins)
 - deletes episodic memories older than `ZANII_RETENTION_EPISODIC_DAYS` (default 0 = keep forever) unless priority ≥ `ZANII_RETENTION_KEEP_PRIORITY` — persona and instruction memories never decay
 
+## Provable memory (Zanii ledger)
+
+ZaniiDB is the memory *engine*; [Zanii](https://ledger.zanii.agency) is the proof-of-action *ledger*. With the `[provable]` extra, every memory mutation (extract, seed, supersede, persona update) emits a hash-chained `zanii.memory` receipt to an append-only, Merkle-verified transparency log — a tamper-evident record of **what your agent remembered and when**, verifiable offline by anyone. Only a salted content commitment leaves the machine; raw memories never do.
+
+```bash
+pip install "zaniidb-agent-memory[provable]"
+zanii-memory ledger-init                    # identity + scoped delegation (memory.*)
+export ZANII_LEDGER_URL=https://ledger.zanii.agency
+export ZANII_LEDGER_API_KEY=zk_live_...
+# ... use memory normally; then, any time:
+zanii-memory ledger-verify                  # offline tamper check of the whole chain
+```
+
+A ledger outage never breaks memory operations. Combined with `superseded_by` history, this answers "why did the agent believe X, and when did that change?" with cryptographic evidence.
+
+## Agent Skill
+
+`skills/zaniidb/` is a portable Agent Skill that makes any coding assistant (Claude Code, Codex, ...) a ZaniiDB expert — mental model, real signatures, and the rules. `cp -r skills/zaniidb ~/.claude/skills/` and your agent stops needing ZaniiDB explained every session.
+
 ## Security & compliance
 
 - **Audit log**: `ZANII_AUDIT_ENABLED=true` records every capture/recall/search/seed/consolidate with timestamps — `zanii-memory audit` or `GET /audit`.

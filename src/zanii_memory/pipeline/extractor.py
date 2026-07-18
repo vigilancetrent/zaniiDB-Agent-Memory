@@ -15,6 +15,7 @@ from ..config import Settings
 from ..embedding import EmbeddingClient
 from ..llm import LLMClient
 from ..store import MemoryStore
+from ..provable import emit_via_store
 from ..types import MEMORY_TYPES, MemoryRecord
 from .scenes import append_scene_facts, maybe_condense_scene
 from .supersede import resolve_conflicts
@@ -196,6 +197,7 @@ async def run_extraction(
                 metadata=mem["metadata"],
             )
             store.insert_l1(record, embedding)
+            emit_via_store(store, "l1.insert", record.content)
             kept.append(record)
             kept_with_embeddings.append((record, embedding))
             inserted += 1

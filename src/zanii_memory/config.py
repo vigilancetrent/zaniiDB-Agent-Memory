@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # Identical requests replay free; any prompt/model/param change is a miss.
     llm_cache_path: str = ""
 
+    # Provable memory (optional): mirror memory mutations as hash-chained
+    # zanii.memory receipts on a Zanii transparency ledger. Off unless both
+    # ledger_url and ledger_identity_file are set (see provable.py).
+    ledger_url: str = ""
+    ledger_api_key: str = ""
+    ledger_identity_file: str = ""
+
     # Gateway
     gateway_host: str = "127.0.0.1"
     gateway_port: int = 8520

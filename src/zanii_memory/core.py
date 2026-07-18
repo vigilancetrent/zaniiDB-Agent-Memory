@@ -21,6 +21,7 @@ from .embedding import EmbeddingClient
 from .llm import LLMClient
 from .pipeline import PipelineScheduler
 from .offload import Offloader
+from .provable import ProvableLedger
 from .pipeline.consolidate import consolidate
 from .pipeline.skills import run_skills
 from .recall import perform_recall, query_embedding
@@ -45,6 +46,9 @@ class MemoryCore:
         self.cfg.data_dir.mkdir(parents=True, exist_ok=True)
         self.cfg.scenes_dir.mkdir(parents=True, exist_ok=True)
         self.store = create_store(self.cfg, want_vectors=self.embedder.enabled)
+        self.ledger = ProvableLedger(self.cfg, self.store)
+        # duck-typed handle so pipeline functions can emit without signature churn
+        self.store.ledger = self.ledger  # type: ignore[attr-defined]
         self.scheduler = PipelineScheduler(self.store, self.llm, self.embedder, self.cfg)
         await self.scheduler.start()
         log.info(
@@ -56,6 +60,8 @@ class MemoryCore:
         )
 
     async def close(self) -> None:
+        if getattr(self, "ledger", None):
+            self.ledger.close()
         if self.scheduler:
             await self.scheduler.stop()
         await self.llm.close()
@@ -153,6 +159,7 @@ class MemoryCore:
                 scene_name=str(mem.get("scene_name", "seeded")),
             )
             self.store.insert_l1(record, embedding)
+            self.ledger.emit("l1.seed", record.content)
             inserted += 1
         self._audit("seed", f"{inserted} memories")
         return inserted

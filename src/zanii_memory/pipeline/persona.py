@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from ..config import Settings
 from ..llm import LLMClient
+from ..provable import emit_via_store
 from ..store import MemoryStore
 from .scenes import read_all_scenes
 
@@ -96,6 +97,7 @@ Write the complete new persona.md now."""
         log.warning("Persona generation returned too little content; keeping existing persona")
         return False
     cfg.persona_path.write_text(persona, encoding="utf-8")
+    emit_via_store(store, "persona.update", persona)
     store.set_kv(PERSONA_KV_KEY, str(total))
     log.info("persona.md regenerated (%d chars, %d memories)", len(persona), total)
     return True
