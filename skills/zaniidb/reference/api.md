@@ -20,8 +20,11 @@ accepts `?token=<key>`).
 | `POST /export` | full portable snapshot |
 | `POST /import` | an export snapshot; idempotent |
 | `POST /consolidate` | near-dup merge + retention decay |
+| `GET /quarantine?limit=` | Memory Firewall: memories held pending review |
+| `POST /quarantine/release` | `{"ids":[...]}` — approve; memory rejoins active recall |
+| `POST /quarantine/reject` | `{"ids":[...]}` — reject; poisoned memory is deleted |
 | `GET /audit?limit=` | audit entries (needs `ZANII_AUDIT_ENABLED=true`) |
-| `GET /api/overview` | dashboard data: stats, recent memories, persona, scenes, skills |
+| `GET /api/overview` | dashboard data: stats (incl. `superseded`, `quarantined`), recent + quarantined memories, persona, scenes, skills, ledger status |
 
 ## MCP server
 
@@ -43,4 +46,4 @@ same data directory and config.
 
 `serve · mcp · seed <file> · search [-c] · export <file> · import <file> ·
 bench · personamem · consolidate · skills · audit · inspect ·
-ledger-init · ledger-verify`
+quarantine list|release|reject · ledger-init · ledger-verify`

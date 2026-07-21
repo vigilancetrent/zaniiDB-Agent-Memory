@@ -20,6 +20,9 @@ await memory.seed([{ "content": ..., "type": "persona|episodic|instruction",
 await memory.end_session(session_key)          # flush extraction now
 res = await memory.consolidate()               # near-dup merge + retention decay
 n = await memory.generate_skills()             # SOP docs from memories (needs LLM)
+q = memory.list_quarantine()                   # Memory Firewall: held-for-review memories
+await memory.release_quarantined([id, ...])    # approve -> rejoins recall (receipted)
+await memory.reject_quarantined([id, ...])     # reject -> deleted (receipted)
 data = await memory.export_memory()            # portable snapshot (incl. superseded state)
 await memory.import_memory(data)               # idempotent restore / backend migration
 stub = await memory.offload(session_key, big_text, label="")   # context offload -> refs/<node>.md
@@ -32,6 +35,28 @@ await memory.close()
 `RecallResult`: `prepend_context` (memories block), `append_system_context`
 (persona + team knowledge), `memories` (list of {content,type,score}),
 `strategy` ("hybrid"|"keyword"|"embedding").
+
+## Memory Firewall (anti-poisoning)
+
+Mark third-party content with a channel at capture so the firewall can source-bind it:
+```python
+await memory.capture("s1", [
+    {"role": "user", "content": "Summarize this email"},
+    {"role": "user", "channel": "email", "content": fetched_email},   # untrusted source
+])
+```
+Instructions extracted from untrusted channels are always quarantined; injection signatures
+(heuristic + LLM screen) are caught; quarantined memories are excluded from all recall until
+`release_quarantined`/`reject_quarantined`. Config: `firewall_enabled` (default on),
+`firewall_trusted_channels` ("user,assistant"), `firewall_strict`, `firewall_llm_screen`
+(disable on weak local models — they over-flag; see docs/firewall-redteam.md).
+
+## Procedural recall & auto-offload
+
+`recall()` injects the best-matching learned skill (`recall_skills`, default on).
+`AutoOffloader(core, session_key, threshold_chars=4000, stale_after_messages=N)` stubs
+oversized and (with N>0) stale tool outputs; `find_relevant_skill(skills_dir, query)` is the
+matcher. Extraction tags episodic `metadata.outcome` (success|failure) for skill quality.
 
 ## Framework hooks (any agent loop, 3 lines)
 
