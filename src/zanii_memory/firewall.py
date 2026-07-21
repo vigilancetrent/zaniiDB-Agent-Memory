@@ -29,6 +29,9 @@ from .config import Settings
 
 # Deterministic injection signatures. Belt-and-braces under the LLM screen:
 # these must be high-precision (quarantine is friction), not high-recall.
+# English patterns run against a de-obfuscated copy (spaced letters collapsed);
+# Arabic patterns run against the raw text. The LLM screen remains the
+# language-agnostic catch-all — see docs/firewall-redteam.md.
 _HEURISTICS: list[tuple[str, re.Pattern]] = [
     ("override-attempt", re.compile(r"\b(ignore|disregard|forget)\b.{0,40}\b(previous|prior|above|all)\b.{0,20}\b(instruction|rule|prompt)", re.I | re.S)),
     ("prompt-probe", re.compile(r"\b(system prompt|developer message|hidden instruction)", re.I)),
@@ -40,10 +43,33 @@ _HEURISTICS: list[tuple[str, re.Pattern]] = [
     ("encoded-payload", re.compile(r"[A-Za-z0-9+/=]{120,}")),
 ]
 
+# Arabic injection signatures (high-value verbs, matched on raw text). Closes
+# the 0/7 Arabic gap the 2026-07-20 red-team measured on the English-only set.
+_HEURISTICS_AR: list[tuple[str, re.Pattern]] = [
+    ("override-attempt", re.compile(r"تجاهل|انسَ?\b.{0,20}(القواعد|التعليمات)|اعتبر.{0,20}تعليماتك")),
+    ("identity-override", re.compile(r"أنت الآن\b.{0,30}(جديد|بلا قيود|حر)")),
+    ("concealment", re.compile(r"لا\s*تخبر|لا\s*تُخبر|بدون\s*علم")),
+    ("exfiltration", re.compile(r"(أرسل|حوّل|حول|انشر).{0,60}(https?://|رابط|الأرشيف الخارجي)")),
+    ("credential-fishing", re.compile(r"(كلمة\s*(المرور|مرور)|مفتاح\s*API|سر).{0,40}(أدرج|أرسل|شارك)")),
+    ("obedience-install", re.compile(r"(يجب|عليك).{0,30}(الالتزام|تلتزم).{0,40}(القادمة|المستقبل|كل\s*المحادثات)")),
+]
+
+# Spaced-letter obfuscation: "I G N O R E" -> "IGNORE". Collapses single ASCII
+# letters separated only by spaces so the English patterns still see the word.
+_SPACED = re.compile(r"\b(?:[A-Za-z]\s){2,}[A-Za-z]\b")
+
+
+def _deobfuscate(content: str) -> str:
+    return _SPACED.sub(lambda m: m.group(0).replace(" ", ""), content)
+
 
 def heuristic_screen(content: str) -> str | None:
     """Returns the matched signature name, or None when clean."""
+    text = _deobfuscate(content)
     for name, pattern in _HEURISTICS:
+        if pattern.search(text):
+            return name
+    for name, pattern in _HEURISTICS_AR:
         if pattern.search(content):
             return name
     return None
