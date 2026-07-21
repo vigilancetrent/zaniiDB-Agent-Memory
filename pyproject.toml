@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zaniidb-agent-memory"
-version = "0.9.1"
+version = "0.9.2"
 description = "ZaniiDB Agent Memory - layered long-term memory (L0-L3) for AI agents: SQLite + hybrid BM25/vector recall, LLM extraction pipeline, FastAPI gateway, Python SDK."
 readme = "README.md"
 license = { text = "MIT" }

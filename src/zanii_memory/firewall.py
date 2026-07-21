@@ -94,7 +94,7 @@ def decide_quarantine(
     if not cfg.firewall_enabled:
         return ""
     untrusted = channels - trusted_channels(cfg)
-    if llm_suspicion:
+    if llm_suspicion and cfg.firewall_llm_screen:
         return f"screen:{llm_suspicion[:200]}"
     hit = heuristic_screen(content)
     if hit:

@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     firewall_enabled: bool = True
     firewall_trusted_channels: str = "user,assistant"
     firewall_strict: bool = False
+    # LLM screen precision scales with model quality; weak local models
+    # over-flag legitimate standing instructions (red-team: phi4 4/8 FP).
+    # Disable to keep the precise heuristic + policy layers without the noise.
+    firewall_llm_screen: bool = True
 
     # Conflict resolution & scene synthesis
     supersede_max_distance: float = 0.45  # neighbor distance considered for contradiction check
