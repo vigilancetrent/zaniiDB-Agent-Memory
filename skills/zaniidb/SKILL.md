@@ -58,8 +58,12 @@ below 50 are dropped at extraction.
 
 Zero-config runs: no keys → capture + keyword search still work, extraction
 pauses. Enable the pipeline with `ZANII_LLM_BASE_URL` + `ZANII_LLM_MODEL` (+
-`ZANII_LLM_API_KEY`) — any OpenAI-compatible endpoint. Vectors need
-`ZANII_EMBEDDING_MODEL`. Postgres: `ZANII_DATABASE_URL=postgresql://…` (else
+`ZANII_LLM_API_KEY`) — any OpenAI-compatible endpoint. For Claude direct, set
+`ZANII_LLM_PROVIDER=anthropic` instead (native `/v1/messages`; base URL defaults
+to `api.anthropic.com/v1`, only key + model needed — see docs/anthropic.md).
+Anthropic has no embeddings API, so in that mode embeddings never fall back to
+the LLM URL — set `ZANII_EMBEDDING_BASE_URL` explicitly or run keyword-only.
+Vectors need `ZANII_EMBEDDING_MODEL`. Postgres: `ZANII_DATABASE_URL=postgresql://…` (else
 SQLite in `ZANII_DATA_DIR`, default `~/.zanii/memory`). Gateway auth:
 `ZANII_GATEWAY_API_KEY` (Bearer; `/health` stays open). Full table in the
 project README.

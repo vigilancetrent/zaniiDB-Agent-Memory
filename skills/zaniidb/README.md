@@ -34,6 +34,6 @@ load `reference/*.md` on demand.
 
 ## Keep it accurate
 
-Written for `zaniidb-agent-memory` **0.9.2**. If the SDK, gateway routes, or
+Written for `zaniidb-agent-memory` **0.10.0**. If the SDK, gateway routes, or
 env vars change, update `SKILL.md` and the matching `reference/*.md` in the
 same change — the whole value of a skill is that it's *correct*.
