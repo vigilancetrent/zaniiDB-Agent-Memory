@@ -97,7 +97,9 @@ project README.
    `ZANII_LEDGER_URL`/`ZANII_LEDGER_API_KEY`/`ZANII_LEDGER_IDENTITY_FILE` —
    every mutation emits a hash-chained `zanii.memory` receipt (salted
    commitment only; raw memory never leaves). Verify with
-   `zanii-memory ledger-verify`. A ledger failure never breaks memory ops.
+   `zanii-memory ledger-verify`; reconstruct a verified incident timeline with
+   `zanii-memory replay [--since --until --json]` (exit 1 on tamper). A ledger
+   failure never breaks memory ops.
 10. **Procedural recall is on by default** (`ZANII_RECALL_SKILLS`): recall() injects the
     best-matching learned skill from `skills/*.md` into the system context. Outcome-tagged
     episodic memories (metadata `outcome: success|failure`) feed skill generation
