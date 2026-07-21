@@ -6,6 +6,7 @@ import logging
 
 from .config import Settings
 from .embedding import EmbeddingClient
+from .pipeline.skills import find_relevant_skill
 from .store import MemoryStore
 from .types import RecallResult
 
@@ -63,6 +64,10 @@ async def perform_recall(
     if team_rows:
         team_lines = "\n".join(f"- [{r['type']}] {r['content']}" for r in team_rows)
         system_parts.append(f"## Team knowledge (shared org memory)\n\n{team_lines}")
+    if cfg.recall_skills:
+        skill = find_relevant_skill(cfg.skills_dir, query)
+        if skill:
+            system_parts.append(f"## Learned procedure (from past runs — follow unless it conflicts)\n\n{skill}")
     append_system = "\n\n".join(system_parts)
 
     return RecallResult(

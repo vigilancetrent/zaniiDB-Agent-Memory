@@ -19,6 +19,7 @@ class LLMClient:
         self.api_key = cfg.llm_api_key
         self.model = cfg.llm_model
         self.enabled = cfg.llm_enabled
+        self.timeout_override = cfg.llm_timeout_s
         self._client: httpx.AsyncClient | None = None
         self.cache = LLMCache(Path(cfg.llm_cache_path)) if cfg.llm_cache_path else None
         # Older models + OSS servers use "max_tokens"; GPT-5.x/o-series require
@@ -46,6 +47,8 @@ class LLMClient:
     ) -> str:
         if not self.enabled:
             raise RuntimeError("LLM is not configured (set ZANII_LLM_BASE_URL and ZANII_LLM_MODEL)")
+        if self.timeout_override > 0:
+            timeout = self.timeout_override
         messages = []
         if system:
             messages.append({"role": "system", "content": system})

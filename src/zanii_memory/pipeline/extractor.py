@@ -52,6 +52,7 @@ Supported types (follow the rules strictly):
 2. episodic — objective actions, decisions, plans, or outcomes. Never pure feelings.
    Pattern: "The user (<name>) did <what> at <absolute time if inferable> in <place> (may include cause/process/result)".
    When the activity time can be inferred from message timestamps, put ISO-8601 "activity_start_time"/"activity_end_time" in metadata.
+   When the result of the action is clear, also set metadata "outcome": "success" or "failure" (omit when ambiguous).
    Priority: 80-100 important events/plans; 60-70 ordinary complete activities; <60 trivia (drop).
 3. instruction — long-term behavior rules the user gives the AI (format, tone, workflow).
    Pattern: "The user requires the AI to ...". Trigger words: "from now on", "always", "remember", "must".

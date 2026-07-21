@@ -279,6 +279,12 @@ The MCP `save_memory` tool takes the same `scope` parameter.
 
 The pipeline distills recurring task patterns from episodic + instruction memories into reusable procedure docs in `skills/*.md` — automatically after each persona regeneration, or on demand with `zanii-memory skills`. Disable auto mode with `ZANII_PIPELINE_SKILLS=false`.
 
+## Procedural recall — the agent stops re-learning
+
+Skills distilled from memory don't just sit on disk: `recall()` matches every query against the skill library and injects the best-matching **learned procedure** into the system context (`ZANII_RECALL_SKILLS`, on by default; fires only on strong matches). Extraction also tags episodic outcomes (`success`/`failure`), so skill generation builds procedures from what *worked* and records failures under **Pitfalls**. Facts + procedures + pitfalls: the memory gets cheaper and more reliable the more the agent runs.
+
+`AutoOffloader` also gained a staleness rule — `stale_after_messages=N` stubs out tool outputs older than N messages even when small (stale results rarely earn their context cost); drill-down by node_id keeps them one lookup away.
+
 ## Consolidation & retention
 
 `zanii-memory consolidate` (also `POST /consolidate`, and automatic each persona cycle):

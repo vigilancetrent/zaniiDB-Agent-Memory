@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
+    # >0 overrides every LLM call timeout (seconds) — for slow local backends
+    # (Ollama on laptop hardware needs 600-1200s for large extraction prompts).
+    llm_timeout_s: float = 0
 
     # Embeddings (OpenAI-compatible) — fall back to the LLM endpoint/key when unset.
     embedding_base_url: str = ""
@@ -35,6 +38,9 @@ class Settings(BaseSettings):
     # Present selected memories oldest->newest (selection stays relevance-ranked).
     # Off by default; not yet benchmark-validated in isolation.
     recall_chronological: bool = False
+    # Procedural recall: inject the best-matching learned skill (skills/*.md)
+    # into the system context. Fires only on strong matches.
+    recall_skills: bool = True
 
     # Pipeline triggers
     pipeline_every_n_turns: int = 5

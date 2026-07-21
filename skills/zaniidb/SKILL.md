@@ -94,7 +94,12 @@ project README.
    every mutation emits a hash-chained `zanii.memory` receipt (salted
    commitment only; raw memory never leaves). Verify with
    `zanii-memory ledger-verify`. A ledger failure never breaks memory ops.
-10. **Benchmark claims must be reproduced, not quoted**: `zanii-memory bench`
+10. **Procedural recall is on by default** (`ZANII_RECALL_SKILLS`): recall() injects the
+    best-matching learned skill from `skills/*.md` into the system context. Outcome-tagged
+    episodic memories (metadata `outcome: success|failure`) feed skill generation
+    (successes -> procedures, failures -> Pitfalls). `AutoOffloader(stale_after_messages=N)`
+    stubs stale tool outputs even when small.
+11. **Benchmark claims must be reproduced, not quoted**: `zanii-memory bench`
     (retrieval) and `zanii-memory personamem` (public PersonaMem harness,
     needs LLM keys, costs real API money — warn before running).
 
