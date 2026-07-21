@@ -5,12 +5,49 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/zaniidb-agent-memory/"><img src="https://img.shields.io/pypi/v/zaniidb-agent-memory?color=2a78d6&label=pypi" alt="PyPI"></a>
+  <a href="https://pypi.org/project/zaniidb-agent-memory/"><img src="https://img.shields.io/pypi/pyversions/zaniidb-agent-memory?color=1baf7a" alt="Python versions"></a>
+  <img src="https://img.shields.io/badge/tests-71%20passing-1baf7a" alt="Tests">
+  <img src="https://img.shields.io/badge/license-MIT-4a3aa7" alt="License">
+  <img src="https://img.shields.io/badge/backends-SQLite%20%C2%B7%20Postgres%2Fpgvector-eb6834" alt="Backends">
+  <img src="https://img.shields.io/badge/self--hosted-yes-2a78d6" alt="Self-hosted">
+</p>
+
+**Long-term memory for AI agents that is accountable, self-correcting, and poison-resistant.**
+Agents remember what matters; humans stop repeating themselves — and every belief is
+traceable, tamper-evident, and defensible.
+
+ZaniiDB captures conversations, distills them into structured memories with an LLM, and recalls
+the right context before each turn — as a Python SDK, an HTTP gateway, an MCP server, or a CLI.
+Runs anywhere from a single SQLite file to Postgres + pgvector, on a laptop with a local model
+or a hosted endpoint — your data never has to leave your infrastructure.
+
+```bash
+pip install zaniidb-agent-memory
+```
+
+<p align="center">
   <img src="assets/demo.gif" alt="ZaniiDB Agent Memory demo: install, serve, capture, search, benchmark" width="760" />
 </p>
 
-**Layered long-term memory for AI agents.** Agents remember; humans stop repeating themselves.
+## What makes it different
 
-ZaniiDB Agent Memory captures conversations, distills them into structured memories with an LLM, and recalls the right context before each turn — as a Python SDK, an HTTP gateway, or a CLI.
+Most "agent memory" just stores and retrieves. ZaniiDB adds the three things regulated,
+security-conscious, and production teams actually need — and that hosted-only competitors
+cannot offer:
+
+| | Capability | Why it matters |
+| :--- | :--- | :--- |
+| 🧠 | **Layered memory (L0→L3)** | Raw turns → atomic facts → scene ledgers → persona. Not a flat vector pile — white-box markdown you can read and audit. |
+| ♻️ | **Self-correcting** | New facts supersede outdated beliefs; paraphrases are dropped, not hoarded. The memory updates instead of accumulating contradictions. |
+| 🛡️ | **Memory Firewall** | Screens every candidate memory against prompt-injection / poisoning before it can influence recall — source-bound, quarantined for review, [measured coverage](docs/firewall-redteam.md). |
+| 🔗 | **Provable memory** | Optional hash-chained ledger receipts: a tamper-evident record of *what the agent remembered and when*, verifiable offline. |
+| 🧭 | **Procedural recall** | Distills how-to skills from past runs and injects the matching procedure — the agent stops re-learning what it already figured out. |
+| 🏠 | **Self-hosted & white-box** | SQLite or your own Postgres, any OpenAI-compatible model (incl. local Ollama), plain-markdown memory. Zero data-residency compromise. |
+
+Verified on the public **PersonaMem** benchmark (reproducible with one command): a stable
+**+12–16 points** over no-memory and at/above frontier full-context reading, from ~100× less
+context per answer. See [Benchmark](#benchmark).
 
 ## Architecture: the memory pyramid
 
@@ -34,8 +71,8 @@ Memory is never flat. Both formation and recall are hierarchical:
 ## Install
 
 ```bash
-pip install -e .              # SQLite backend (default)
-pip install -e ".[postgres]"  # + PostgreSQL/pgvector backend
+pip install zaniidb-agent-memory              # SQLite backend (default)
+pip install "zaniidb-agent-memory[postgres]"  # + PostgreSQL/pgvector backend
 ```
 
 Requires Python 3.11+.
