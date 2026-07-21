@@ -16,10 +16,15 @@ class Settings(BaseSettings):
     # Storage backend: empty -> SQLite in data_dir; postgresql://... -> Postgres + pgvector.
     database_url: str = ""
 
-    # LLM (OpenAI-compatible chat completions) — powers L1/L3 extraction.
+    # LLM — powers L1/L3 extraction, conflict resolution, the firewall screen.
+    # provider="openai": any OpenAI-compatible /chat/completions endpoint (incl.
+    #   Anthropic's compat layer, gateways, Ollama). provider="anthropic": native
+    #   Claude Messages API (/v1/messages) — base URL defaults to api.anthropic.com.
+    llm_provider: Literal["openai", "anthropic"] = "openai"
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
+    anthropic_version: str = "2023-06-01"  # sent as anthropic-version header in native mode
     # >0 overrides every LLM call timeout (seconds) — for slow local backends
     # (Ollama on laptop hardware needs 600-1200s for large extraction prompts).
     llm_timeout_s: float = 0
@@ -98,12 +103,29 @@ class Settings(BaseSettings):
     cors_origins: str = ""  # comma-separated allow-list; empty = no CORS headers
 
     @property
+    def resolved_llm_base_url(self) -> str:
+        if self.llm_base_url:
+            return self.llm_base_url
+        if self.llm_provider == "anthropic":
+            return "https://api.anthropic.com/v1"  # native-mode default
+        return ""
+
+    @property
     def llm_enabled(self) -> bool:
+        # Native Anthropic mode needs only a key + model (base URL defaults).
+        if self.llm_provider == "anthropic":
+            return bool(self.llm_api_key and self.llm_model)
         return bool(self.llm_base_url and self.llm_model)
 
     @property
     def resolved_embedding_base_url(self) -> str:
-        return self.embedding_base_url or self.llm_base_url
+        # Anthropic has no embeddings API; never fall back to the Anthropic LLM
+        # base URL for embeddings — require an explicit embedding endpoint.
+        if self.embedding_base_url:
+            return self.embedding_base_url
+        if self.llm_provider == "anthropic":
+            return ""
+        return self.llm_base_url
 
     @property
     def resolved_embedding_api_key(self) -> str:

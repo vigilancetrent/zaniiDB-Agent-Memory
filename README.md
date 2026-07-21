@@ -20,7 +20,9 @@ traceable, tamper-evident, and defensible.
 ZaniiDB captures conversations, distills them into structured memories with an LLM, and recalls
 the right context before each turn — as a Python SDK, an HTTP gateway, an MCP server, or a CLI.
 Runs anywhere from a single SQLite file to Postgres + pgvector, on a laptop with a local model
-or a hosted endpoint — your data never has to leave your infrastructure.
+or a hosted endpoint — your data never has to leave your infrastructure. Works with any
+OpenAI-compatible model (OpenAI, gateways, local Ollama) and, natively, with
+[Claude / Anthropic](docs/anthropic.md).
 
 ```bash
 pip install zaniidb-agent-memory
@@ -106,9 +108,10 @@ Everything has a default; the system runs with zero configuration. Set `ZANII_LL
 | :--- | :--- | :--- |
 | `ZANII_DATA_DIR` | `~/.zanii/memory` | Data directory (db, scenes, persona, refs, canvas) |
 | `ZANII_DATABASE_URL` | — | `postgresql://...` selects the Postgres backend; empty = SQLite |
-| `ZANII_LLM_BASE_URL` | — | OpenAI-compatible endpoint, e.g. `https://api.openai.com/v1` |
+| `ZANII_LLM_PROVIDER` | `openai` | `openai` (any OpenAI-compatible `/chat/completions`) or `anthropic` (native Claude `/v1/messages` — see [docs/anthropic.md](docs/anthropic.md)) |
+| `ZANII_LLM_BASE_URL` | — | OpenAI-compatible endpoint, e.g. `https://api.openai.com/v1` (defaults to `api.anthropic.com/v1` in `anthropic` mode) |
 | `ZANII_LLM_API_KEY` | — | API key |
-| `ZANII_LLM_MODEL` | — | Model name, e.g. `gpt-4o-mini` |
+| `ZANII_LLM_MODEL` | — | Model name, e.g. `gpt-4o-mini`, `claude-opus-4-8` |
 | `ZANII_EMBEDDING_BASE_URL` | LLM base URL | Embeddings endpoint (falls back to LLM endpoint) |
 | `ZANII_EMBEDDING_API_KEY` | LLM key | Embeddings key |
 | `ZANII_EMBEDDING_MODEL` | — | e.g. `text-embedding-3-small` |

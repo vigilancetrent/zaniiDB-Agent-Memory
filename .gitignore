@@ -15,3 +15,5 @@ secrets/
 *.rar
 *.zip
 *.7z
+/docs
+tasks/
