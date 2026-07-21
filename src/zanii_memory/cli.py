@@ -212,6 +212,67 @@ def cmd_ledger_verify(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def cmd_replay(args: argparse.Namespace) -> None:
+    """Flight-recorder replay: verify the local receipt chain, then print an
+    incident timeline (chain spine + human-readable audit narrative)."""
+    try:
+        from zanii.memory import verify_memory_chain
+    except ImportError:
+        sys.exit('Requires the zanii SDK: pip install "zaniidb-agent-memory[provable]"')
+    cfg = Settings()
+    path = cfg.data_dir / "ledger_entries.jsonl"
+    if not path.exists():
+        sys.exit(f"No ledger entries at {path} (provable memory not enabled or nothing recorded)")
+    entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    report = verify_memory_chain(entries)
+
+    def in_window(ts: str) -> bool:
+        return (not args.since or ts >= args.since) and (not args.until or ts <= args.until)
+
+    events = []
+    for e in entries:
+        p = e["payload"]
+        if in_window(p["ts"]):
+            events.append({"ts": p["ts"], "source": "receipt", "kind": p["kind"], "seq": p["seq"],
+                           "commitment": p["content_commitment"], "entry_hash": p["entry_hash"]})
+    audit_path_note = ""
+    try:
+        async def collect(core: MemoryCore):
+            return core.audit_log(limit=100000)
+        rows = _run_with_core(collect)
+        events += [{"ts": r["ts"], "source": "audit", "kind": r["op"], "detail": r["detail"]}
+                   for r in rows if in_window(r["ts"])]
+    except Exception:
+        audit_path_note = " (audit log unavailable — receipt spine only)"
+    events.sort(key=lambda x: (x["ts"], x.get("seq", -1)))
+
+    identity_did = ""
+    if cfg.ledger_identity_file and Path(cfg.ledger_identity_file).exists():
+        identity_did = json.loads(Path(cfg.ledger_identity_file).read_text(encoding="utf-8")).get("did", "")
+
+    if args.json:
+        print(json.dumps({"agent_did": identity_did, "chain": report, "events": events},
+                         ensure_ascii=False, indent=2))
+        if not report.get("ok"):
+            sys.exit(1)
+        return
+
+    verdict = "VERIFIED — chain intact" if report.get("ok") else f"TAMPERED: {report.get('reasons')}"
+    print("=== ZaniiDB Flight Recorder — memory replay ===")
+    if identity_did:
+        print(f"Agent:   {identity_did}")
+    print(f"Chain:   {len(entries)} receipts, {verdict}")
+    window = f"{args.since or 'start'} .. {args.until or 'now'}"
+    print(f"Window:  {window} — {len(events)} events{audit_path_note}\n")
+    for ev in events:
+        if ev["source"] == "receipt":
+            print(f"{ev['ts']}  [receipt #{ev['seq']:>4}] {ev['kind']:<18} {ev['commitment'][:23]}…")
+        else:
+            print(f"{ev['ts']}  [audit        ] {ev['kind']:<18} {ev['detail']}")
+    if not report.get("ok"):
+        sys.exit(1)
+
+
 def cmd_audit(args: argparse.Namespace) -> None:
     async def do(core: MemoryCore):
         entries = core.audit_log(args.limit)
@@ -303,6 +364,12 @@ def main() -> None:
 
     p_lverify = sub.add_parser("ledger-verify", help="Verify the local provable-memory chain (offline)")
     p_lverify.set_defaults(func=cmd_ledger_verify)
+
+    p_replay = sub.add_parser("replay", help="Flight-recorder replay: verified incident timeline of what the agent remembered and did")
+    p_replay.add_argument("--since", default="", help="ISO timestamp lower bound (e.g. 2026-07-20T00:00:00Z)")
+    p_replay.add_argument("--until", default="", help="ISO timestamp upper bound")
+    p_replay.add_argument("--json", action="store_true", help="Machine-readable output (for insurer/audit tooling)")
+    p_replay.set_defaults(func=cmd_replay)
 
     p_audit = sub.add_parser("audit", help="Show the audit log")
     p_audit.add_argument("-n", "--limit", type=int, default=100)

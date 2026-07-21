@@ -46,4 +46,6 @@ same data directory and config.
 
 `serve · mcp · seed <file> · search [-c] · export <file> · import <file> ·
 bench · personamem · consolidate · skills · audit · inspect ·
-quarantine list|release|reject · ledger-init · ledger-verify`
+quarantine list|release|reject · ledger-init · ledger-verify ·
+replay [--since --until --json]` (flight-recorder timeline: verifies the
+receipt chain, then prints receipts + audit narrative; exit 1 on tamper)
