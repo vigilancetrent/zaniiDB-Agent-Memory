@@ -151,6 +151,22 @@ def cmd_skills(args: argparse.Namespace) -> None:
     _run_with_core(do)
 
 
+def cmd_quarantine(args: argparse.Namespace) -> None:
+    async def do(core: MemoryCore):
+        if args.action == "list":
+            rows = core.list_quarantine(args.limit)
+            if not rows:
+                print("Quarantine is empty.")
+            for r in rows:
+                print(f"{r['id']}  [{r['type']}]  {r['quarantine']}\n    {r['content'][:160]}")
+        elif args.action == "release":
+            print(f"Released {await core.release_quarantined(args.ids)} memories into active recall")
+        elif args.action == "reject":
+            print(f"Rejected (deleted) {await core.reject_quarantined(args.ids)} memories")
+
+    _run_with_core(do)
+
+
 def cmd_ledger_init(args: argparse.Namespace) -> None:
     try:
         from zanii.core import create_cert, generate_keypair
@@ -273,6 +289,12 @@ def main() -> None:
 
     p_skills = sub.add_parser("skills", help="Distill SOP/skill docs from memories (requires LLM)")
     p_skills.set_defaults(func=cmd_skills)
+
+    p_q = sub.add_parser("quarantine", help="Memory Firewall review: list / release / reject")
+    p_q.add_argument("action", choices=["list", "release", "reject"])
+    p_q.add_argument("ids", nargs="*", help="Memory ids (for release/reject)")
+    p_q.add_argument("-n", "--limit", type=int, default=100)
+    p_q.set_defaults(func=cmd_quarantine)
 
     p_linit = sub.add_parser("ledger-init", help="Create a Zanii identity + delegation for provable memory")
     p_linit.add_argument("--identity-file", default=str(Path.home() / ".zanii" / "ledger_identity.json"))

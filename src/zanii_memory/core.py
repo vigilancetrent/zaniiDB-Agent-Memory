@@ -86,7 +86,11 @@ class MemoryCore:
                 continue
             ts = msg.get("timestamp")
             ts = int(ts) if isinstance(ts, (int, float)) and ts > 0 else None
-            self.store.record_l0(session_key, role, content, ts, session_id)
+            # Firewall source binding: integrations mark third-party content
+            # (fetched web/email/tool payloads pasted into the turn) with a
+            # channel outside firewall_trusted_channels.
+            channel = str(msg.get("channel") or role)
+            self.store.record_l0(session_key, role, content, ts, session_id, channel=channel)
             recorded += 1
         if recorded:
             self.scheduler.on_captured(session_key)
@@ -185,6 +189,34 @@ class MemoryCore:
     def audit_log(self, limit: int = 100) -> list[dict[str, Any]]:
         assert self.store, "call initialize() first"
         return self.store.get_audit(limit)
+
+    # ============================
+    # Memory Firewall review
+    # ============================
+
+    def list_quarantine(self, limit: int = 100) -> list[dict[str, Any]]:
+        assert self.store, "call initialize() first"
+        return self.store.get_quarantined(limit)
+
+    async def release_quarantined(self, ids: list[str]) -> int:
+        """Human review approved: memories rejoin active recall (receipted)."""
+        assert self.store, "call initialize() first"
+        released = self.store.release_l1(ids)
+        if released:
+            self._audit("firewall_release", f"{released} memories: {','.join(ids[:10])}")
+            self.ledger.emit("firewall.release", json.dumps({"ids": ids}, sort_keys=True))
+        return released
+
+    async def reject_quarantined(self, ids: list[str]) -> int:
+        """Human review rejected: poisoned memories are deleted (receipted)."""
+        assert self.store, "call initialize() first"
+        quarantined_ids = {r["id"] for r in self.store.get_quarantined(limit=10_000)}
+        ids = [i for i in ids if i in quarantined_ids]  # only quarantined rows are deletable here
+        deleted = self.store.delete_l1(ids)
+        if deleted:
+            self._audit("firewall_reject", f"{deleted} memories: {','.join(ids[:10])}")
+            self.ledger.emit("firewall.reject", json.dumps({"ids": ids}, sort_keys=True))
+        return deleted
 
     def _audit(self, op: str, detail: str) -> None:
         if self.cfg.audit_enabled and self.store:

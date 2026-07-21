@@ -218,6 +218,18 @@ def create_app(config: Settings | None = None) -> FastAPI:
     async def consolidate() -> dict[str, Any]:
         return await core.consolidate()
 
+    @app.get("/quarantine", dependencies=[Depends(require_auth)])
+    async def quarantine_list(limit: int = 100) -> dict[str, Any]:
+        return {"entries": core.list_quarantine(min(max(limit, 1), 1000))}
+
+    @app.post("/quarantine/release", dependencies=[Depends(require_auth)])
+    async def quarantine_release(body: dict[str, Any]) -> dict[str, Any]:
+        return {"released": await core.release_quarantined(list(body.get("ids", [])))}
+
+    @app.post("/quarantine/reject", dependencies=[Depends(require_auth)])
+    async def quarantine_reject(body: dict[str, Any]) -> dict[str, Any]:
+        return {"rejected": await core.reject_quarantined(list(body.get("ids", [])))}
+
     @app.get("/audit", dependencies=[Depends(require_auth)])
     async def audit(limit: int = 100) -> dict[str, Any]:
         return {"entries": core.audit_log(min(max(limit, 1), 1000))}
@@ -240,10 +252,16 @@ def create_app(config: Settings | None = None) -> FastAPI:
         ledger_entries = 0
         if ledger is not None and ledger.enabled and ledger.entries_path.exists():
             ledger_entries = sum(1 for line in ledger.entries_path.read_text(encoding="utf-8").splitlines() if line.strip())
+        quarantined = core.list_quarantine(25)
         return {
             "version": __version__,
             **core.stats(),
             "superseded": superseded,
+            "quarantined": len(quarantined),
+            "quarantine_entries": [
+                {"id": r["id"], "content": r["content"], "type": r["type"], "reason": r["quarantine"]}
+                for r in quarantined
+            ],
             "ledger": {"enabled": bool(ledger is not None and ledger.enabled), "entries": ledger_entries},
             "recent_memories": [
                 {"content": r["content"], "type": r["type"], "scope": r.get("scope", "user")} for r in recent

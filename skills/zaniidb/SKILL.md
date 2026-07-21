@@ -99,7 +99,13 @@ project README.
     episodic memories (metadata `outcome: success|failure`) feed skill generation
     (successes -> procedures, failures -> Pitfalls). `AutoOffloader(stale_after_messages=N)`
     stubs stale tool outputs even when small.
-11. **Benchmark claims must be reproduced, not quoted**: `zanii-memory bench`
+11. **The Memory Firewall is on by default.** Mark third-party content with a channel at
+    capture ({"channel": "email"|"web"|"tool", ...}); instructions from untrusted channels
+    are always quarantined, injection signatures are screened (heuristics + LLM), and
+    quarantined memories never reach recall until reviewed (`zanii-memory quarantine`).
+    Never disable it in integration code; never route fetched content through a trusted
+    channel to "make it work".
+12. **Benchmark claims must be reproduced, not quoted**: `zanii-memory bench`
     (retrieval) and `zanii-memory personamem` (public PersonaMem harness,
     needs LLM keys, costs real API money — warn before running).
 

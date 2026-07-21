@@ -31,10 +31,10 @@ try:
 except ImportError:  # pragma: no cover
     _HAS_PSYCOPG = False
 
-_L0_COLS = 'id, session_key, session_id, role, content, "timestamp", recorded_at'
+_L0_COLS = 'id, session_key, session_id, role, content, channel, "timestamp", recorded_at'
 _L1_COLS = (
     "id, type, content, priority, scope, scene_name, session_key, session_id,"
-    " metadata, created_at, updated_at, superseded_by"
+    " metadata, created_at, updated_at, superseded_by, quarantine"
 )
 
 _SCHEMA = """
@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS l0_conversations (
     session_id TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    channel TEXT NOT NULL DEFAULT 'user',
     "timestamp" BIGINT NOT NULL,
     recorded_at BIGINT NOT NULL,
     fts tsvector GENERATED ALWAYS AS (to_tsvector('{ts_config}', content)) STORED
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS l1_records (
     priority INTEGER NOT NULL DEFAULT 60,
     scope TEXT NOT NULL DEFAULT 'user',
     superseded_by TEXT NOT NULL DEFAULT '',
+    quarantine TEXT NOT NULL DEFAULT '',
     scene_name TEXT NOT NULL DEFAULT '',
     session_key TEXT NOT NULL DEFAULT '',
     session_id TEXT NOT NULL DEFAULT '',
@@ -68,6 +70,8 @@ CREATE TABLE IF NOT EXISTS l1_records (
 );
 ALTER TABLE l1_records ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'user';
 ALTER TABLE l1_records ADD COLUMN IF NOT EXISTS superseded_by TEXT NOT NULL DEFAULT '';
+ALTER TABLE l1_records ADD COLUMN IF NOT EXISTS quarantine TEXT NOT NULL DEFAULT '';
+ALTER TABLE l0_conversations ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'user';
 CREATE INDEX IF NOT EXISTS idx_l1_type ON l1_records(type);
 CREATE INDEX IF NOT EXISTS idx_l1_fts ON l1_records USING GIN(fts);
 
@@ -148,13 +152,20 @@ class PostgresStore:
     # ============================
 
     def record_l0(
-        self, session_key: str, role: str, content: str, timestamp: int | None = None, session_id: str = ""
+        self,
+        session_key: str,
+        role: str,
+        content: str,
+        timestamp: int | None = None,
+        session_id: str = "",
+        channel: str = "user",
     ) -> int:
         with self._lock:
             row = self.db.execute(
-                'INSERT INTO l0_conversations (session_key, session_id, role, content, "timestamp", recorded_at)'
-                " VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                (session_key, session_id, role, content, timestamp or now_ms(), now_ms()),
+                'INSERT INTO l0_conversations (session_key, session_id, role, content, channel,'
+                ' "timestamp", recorded_at)'
+                " VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (session_key, session_id, role, content, channel, timestamp or now_ms(), now_ms()),
             ).fetchone()
             return int(row["id"])
 
@@ -209,9 +220,11 @@ class PostgresStore:
     # L1 memories
     # ============================
 
-    def insert_l1(self, record: MemoryRecord, embedding: list[float] | None = None) -> int:
+    def insert_l1(
+        self, record: MemoryRecord, embedding: list[float] | None = None, quarantine: str = ""
+    ) -> int:
         cols = _L1_COLS
-        placeholders = "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, ''"
+        placeholders = "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, '', %s"
         params: list[Any] = [
             record.id,
             record.type,
@@ -224,6 +237,7 @@ class PostgresStore:
             json.dumps(record.metadata, ensure_ascii=False),
             record.created_at,
             record.updated_at,
+            quarantine[:300],
         ]
         if embedding is not None and self.vec_enabled:
             cols += ", embedding"
@@ -242,7 +256,7 @@ class PostgresStore:
         with self._lock:
             return int(
                 self.db.execute(
-                    "SELECT COUNT(*) AS n FROM l1_records WHERE superseded_by = ''"
+                    "SELECT COUNT(*) AS n FROM l1_records WHERE superseded_by = '' AND quarantine = '' AND quarantine = ''"
                 ).fetchone()["n"]
             )
 
@@ -252,7 +266,7 @@ class PostgresStore:
         with self._lock:
             cur = self.db.execute(
                 "UPDATE l1_records SET superseded_by = %s, updated_at = %s"
-                " WHERE id = ANY(%s) AND superseded_by = ''",
+                " WHERE id = ANY(%s) AND superseded_by = '' AND quarantine = ''",
                 (new_id, now_ms(), old_ids),
             )
             return cur.rowcount
@@ -275,7 +289,7 @@ class PostgresStore:
         cfg = self.text_search_config
         sql = (
             f"SELECT {_L1_COLS}, ts_rank(fts, to_tsquery('{cfg}', %s)) AS score"
-            f" FROM l1_records WHERE fts @@ to_tsquery('{cfg}', %s) AND superseded_by = ''"
+            f" FROM l1_records WHERE fts @@ to_tsquery('{cfg}', %s) AND superseded_by = '' AND quarantine = '' AND quarantine = ''"
         )
         params: list[Any] = [tsq, tsq]
         if type:
@@ -299,7 +313,7 @@ class PostgresStore:
         with self._lock:
             rows = self.db.execute(
                 f"SELECT {_L1_COLS}, (embedding <=> %s::vector) AS distance FROM l1_records"
-                " WHERE embedding IS NOT NULL AND superseded_by = ''"
+                " WHERE embedding IS NOT NULL AND superseded_by = '' AND quarantine = '' AND quarantine = ''"
                 " ORDER BY embedding <=> %s::vector LIMIT %s",
                 (vec, vec, limit),
             ).fetchall()
@@ -342,7 +356,7 @@ class PostgresStore:
         created_before: int | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        sql = f"SELECT {_L1_COLS} FROM l1_records WHERE superseded_by = ''"
+        sql = f"SELECT {_L1_COLS} FROM l1_records WHERE superseded_by = '' AND quarantine = ''"
         params: list[Any] = []
         if type:
             sql += " AND type = %s"
@@ -365,6 +379,35 @@ class PostgresStore:
             cur = self.db.execute("DELETE FROM l1_records WHERE id = ANY(%s)", (ids,))
             return cur.rowcount
 
+    def quarantine_l1(self, ids: list[str], reason: str) -> int:
+        if not ids:
+            return 0
+        with self._lock:
+            cur = self.db.execute(
+                "UPDATE l1_records SET quarantine = %s, updated_at = %s WHERE id = ANY(%s)",
+                (reason[:300], now_ms(), ids),
+            )
+            return cur.rowcount
+
+    def release_l1(self, ids: list[str]) -> int:
+        if not ids:
+            return 0
+        with self._lock:
+            cur = self.db.execute(
+                "UPDATE l1_records SET quarantine = '', updated_at = %s"
+                " WHERE id = ANY(%s) AND quarantine != ''",
+                (now_ms(), ids),
+            )
+            return cur.rowcount
+
+    def get_quarantined(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.db.execute(
+                f"SELECT {_L1_COLS} FROM l1_records WHERE quarantine != ''"
+                " ORDER BY created_at DESC LIMIT %s",
+                (limit,),
+            ).fetchall()
+
     def find_near_duplicate_pairs(self, max_distance: float) -> list[tuple[str, str]]:
         """(keep_id, drop_id) near-duplicate pairs by cosine distance.
         Per-row nearest-neighbor via LATERAL, so the HNSW index serves each
@@ -380,10 +423,10 @@ class PostgresStore:
                 "   SELECT b.id, b.priority, b.created_at,"
                 "          (b.embedding <=> a.embedding) AS dist"
                 "   FROM l1_records b"
-                "   WHERE b.id <> a.id AND b.embedding IS NOT NULL AND b.superseded_by = ''"
+                "   WHERE b.id <> a.id AND b.embedding IS NOT NULL AND b.superseded_by = '' AND b.quarantine = ''"
                 "   ORDER BY b.embedding <=> a.embedding LIMIT 1"
                 " ) n ON n.dist <= %s"
-                " WHERE a.embedding IS NOT NULL AND a.superseded_by = ''",
+                " WHERE a.embedding IS NOT NULL AND a.superseded_by = '' AND a.quarantine = ''",
                 (max_distance,),
             ).fetchall()
         seen: set[tuple[str, str]] = set()

@@ -102,6 +102,8 @@ DASHBOARD_HTML = """<!doctype html>
         <div id="results"><div class="empty">Type to search.</div></div>
       </div></section>
       <section><h2>Recent memories</h2><div class="body" id="recent"></div></section>
+      <section id="qsec" style="display:none"><h2>Firewall quarantine — pending review</h2>
+        <div class="body" id="quarantine"></div></section>
       <section><h2>Audit trail</h2><div class="body" id="audit"></div></section>
     </div>
     <div>
@@ -139,15 +141,20 @@ async function load() {
   const tiles = [
     [d.l1_memories, "active memories"],
     [d.superseded ?? 0, "superseded (history)"],
+    [d.quarantined ?? 0, "quarantined (firewall)"],
     [d.l0_messages, "captured messages"],
     [d.sessions, "sessions"],
-    [(d.scenes || []).length, "scenes"],
     [d.ledger && d.ledger.enabled ? d.ledger.entries : "—", "ledger receipts"],
   ];
   document.getElementById("tiles").innerHTML = tiles.map(([n, l]) =>
     `<div class="tile"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`).join("");
   document.getElementById("recent").innerHTML =
     (d.recent_memories || []).map(memHtml).join("") || `<div class="empty">No memories yet — capture a conversation or seed facts.</div>`;
+  const q = d.quarantine_entries || [];
+  document.getElementById("qsec").style.display = q.length ? "" : "none";
+  document.getElementById("quarantine").innerHTML = q.map(r =>
+    `<div class="mem"><span class="chip" style="background:var(--red)">${esc(r.reason.split(":")[0])}</span>` +
+    `<span>${esc(r.content)}</span><span class="score">${esc(r.id.slice(0,8))}</span></div>`).join("");
   document.getElementById("persona").textContent = d.persona || "(no persona generated yet)";
   document.getElementById("scenes").innerHTML =
     (d.scenes || []).map(s => `<span>${esc(s)}</span>`).join("") || `<div class="empty">none</div>`;

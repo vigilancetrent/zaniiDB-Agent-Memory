@@ -98,6 +98,7 @@ class SqliteStore:
                     session_id TEXT NOT NULL DEFAULT '',
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
+                    channel TEXT NOT NULL DEFAULT 'user',
                     timestamp INTEGER NOT NULL,
                     recorded_at INTEGER NOT NULL
                 );
@@ -111,6 +112,7 @@ class SqliteStore:
                     priority INTEGER NOT NULL DEFAULT 60,
                     scope TEXT NOT NULL DEFAULT 'user',
                     superseded_by TEXT NOT NULL DEFAULT '',
+                    quarantine TEXT NOT NULL DEFAULT '',
                     scene_name TEXT NOT NULL DEFAULT '',
                     session_key TEXT NOT NULL DEFAULT '',
                     session_id TEXT NOT NULL DEFAULT '',
@@ -145,6 +147,8 @@ class SqliteStore:
             for ddl in (
                 "ALTER TABLE l1_records ADD COLUMN scope TEXT NOT NULL DEFAULT 'user'",
                 "ALTER TABLE l1_records ADD COLUMN superseded_by TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE l1_records ADD COLUMN quarantine TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE l0_conversations ADD COLUMN channel TEXT NOT NULL DEFAULT 'user'",
             ):
                 try:
                     self.db.execute(ddl)
@@ -186,13 +190,19 @@ class SqliteStore:
     # ============================
 
     def record_l0(
-        self, session_key: str, role: str, content: str, timestamp: int | None = None, session_id: str = ""
+        self,
+        session_key: str,
+        role: str,
+        content: str,
+        timestamp: int | None = None,
+        session_id: str = "",
+        channel: str = "user",
     ) -> int:
         with self._lock:
             cur = self.db.execute(
-                "INSERT INTO l0_conversations (session_key, session_id, role, content, timestamp, recorded_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (session_key, session_id, role, content, timestamp or now_ms(), now_ms()),
+                "INSERT INTO l0_conversations (session_key, session_id, role, content, channel,"
+                " timestamp, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (session_key, session_id, role, content, channel, timestamp or now_ms(), now_ms()),
             )
             self.db.commit()
             return int(cur.lastrowid)
@@ -260,7 +270,7 @@ class SqliteStore:
         params: list[Any] = [f"%{t}%" for t in escaped]
         sql = f"SELECT rowid AS _rowid, * FROM {table} WHERE ({clauses})"
         if table == "l1_records":
-            sql += " AND superseded_by = ''"
+            sql += " AND superseded_by = '' AND quarantine = ''"
         if extra_where:
             sql += f" AND {extra_where}"
             params.extend(extra_params or [])
@@ -275,12 +285,14 @@ class SqliteStore:
     # L1 memories
     # ============================
 
-    def insert_l1(self, record: MemoryRecord, embedding: list[float] | None = None) -> int:
+    def insert_l1(
+        self, record: MemoryRecord, embedding: list[float] | None = None, quarantine: str = ""
+    ) -> int:
         with self._lock:
             cur = self.db.execute(
                 "INSERT INTO l1_records (id, type, content, priority, scope, scene_name, session_key,"
-                " session_id, metadata, created_at, updated_at, superseded_by)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')",
+                " session_id, metadata, created_at, updated_at, superseded_by, quarantine)"
+                f" VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)",
                 (
                     record.id,
                     record.type,
@@ -293,6 +305,7 @@ class SqliteStore:
                     json.dumps(record.metadata, ensure_ascii=False),
                     record.created_at,
                     record.updated_at,
+                    quarantine,
                 ),
             )
             rowid = int(cur.lastrowid)
@@ -310,11 +323,49 @@ class SqliteStore:
         return row is not None
 
     def count_l1(self) -> int:
-        """Active (non-superseded) memories."""
+        """Active (non-superseded, non-quarantined) memories."""
         with self._lock:
             return int(
-                self.db.execute("SELECT COUNT(*) FROM l1_records WHERE superseded_by = ''").fetchone()[0]
+                self.db.execute(
+                    "SELECT COUNT(*) FROM l1_records WHERE superseded_by = '' AND quarantine = ''"
+                ).fetchone()[0]
             )
+
+    def quarantine_l1(self, ids: list[str], reason: str) -> int:
+        if not ids:
+            return 0
+        placeholders = ",".join("?" * len(ids))
+        with self._lock:
+            cur = self.db.execute(
+                f"UPDATE l1_records SET quarantine = ?, updated_at = ? WHERE id IN ({placeholders})",
+                [reason[:300], now_ms(), *ids],
+            )
+            self.db.commit()
+            return cur.rowcount
+
+    def release_l1(self, ids: list[str]) -> int:
+        """Human review approved: memory rejoins active recall."""
+        if not ids:
+            return 0
+        placeholders = ",".join("?" * len(ids))
+        with self._lock:
+            cur = self.db.execute(
+                f"UPDATE l1_records SET quarantine = '', updated_at = ? WHERE id IN ({placeholders})"
+                " AND quarantine != ''",
+                [now_ms(), *ids],
+            )
+            self.db.commit()
+            return cur.rowcount
+
+    def get_quarantined(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT id, type, content, priority, scope, scene_name, session_key, session_id,"
+                " metadata, created_at, updated_at, quarantine FROM l1_records"
+                " WHERE quarantine != '' ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def mark_superseded(self, old_ids: list[str], new_id: str) -> int:
         """Conflict resolution: old memories are kept (white-box history) but
@@ -335,7 +386,8 @@ class SqliteStore:
         with self._lock:
             rows = self.db.execute(
                 "SELECT id, type, content, priority, scope, scene_name, session_key, session_id,"
-                " metadata, created_at, updated_at, superseded_by FROM l1_records ORDER BY created_at"
+                " metadata, created_at, updated_at, superseded_by, quarantine"
+                " FROM l1_records ORDER BY created_at"
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -348,7 +400,7 @@ class SqliteStore:
     ) -> list[dict[str, Any]]:
         sql = (
             "SELECT id, type, content, priority, scope, scene_name, session_key, session_id,"
-            " metadata, created_at, updated_at FROM l1_records WHERE superseded_by = ''"
+            " metadata, created_at, updated_at FROM l1_records WHERE superseded_by = '' AND quarantine = ''"
         )
         params: list[Any] = []
         if type:
@@ -479,7 +531,7 @@ class SqliteStore:
         sql = (
             "SELECT r.rowid AS _rowid, r.*, bm25(l1_fts) AS rank FROM l1_fts"
             " JOIN l1_records r ON r.rowid = l1_fts.rowid WHERE l1_fts MATCH ?"
-            " AND r.superseded_by = ''"
+            " AND r.superseded_by = '' AND r.quarantine = ''"
         )
         params: list[Any] = [match]
         if type:
@@ -509,7 +561,7 @@ class SqliteStore:
         results = []
         for h in hits:
             row = rows.get(h["rowid"])
-            if row and not row.get("superseded_by"):
+            if row and not row.get("superseded_by") and not row.get("quarantine"):
                 results.append({**row, "score": 1.0 - h["distance"], "distance": h["distance"]})
         return results
 

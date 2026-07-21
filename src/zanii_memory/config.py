@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     fts_tokenizer: Literal["unicode61", "trigram"] = "unicode61"
     pg_text_search_config: str = "simple"
 
+    # Memory Firewall (anti-poisoning). Channels outside the trusted set mark
+    # content as third-party (tool outputs, fetched web/email); instructions
+    # from untrusted channels are always quarantined. strict=True quarantines
+    # EVERY untrusted-channel memory pending review.
+    firewall_enabled: bool = True
+    firewall_trusted_channels: str = "user,assistant"
+    firewall_strict: bool = False
+
     # Conflict resolution & scene synthesis
     supersede_max_distance: float = 0.45  # neighbor distance considered for contradiction check
     scene_condense_chars: int = 3000  # LLM-synthesize scene files above this size; 0 = off
