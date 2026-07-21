@@ -16,4 +16,5 @@ secrets/
 *.zip
 *.7z
 docs/outreach-*.md
+docs/internal-*.md
 tasks/
